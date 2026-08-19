@@ -1,5 +1,6 @@
 # Praxsuite SDK for Unity
 
+[![CI](https://github.com/TesseractSoftwares/Praxsuite-SDK-Unity/actions/workflows/ci.yml/badge.svg)](https://github.com/TesseractSoftwares/Praxsuite-SDK-Unity/actions/workflows/ci.yml)
 [![Unity 2021.3+](https://img.shields.io/badge/unity-2021.3%2B-black?logo=unity)](https://unity.com)
 [![Licence](https://img.shields.io/badge/licence-Praxsuite%20Open%20SDK-blue)](LICENSE)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)](package.json)
