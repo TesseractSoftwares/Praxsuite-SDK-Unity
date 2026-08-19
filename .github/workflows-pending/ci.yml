@@ -1,0 +1,79 @@
+name: CI
+
+# Runs on the public mirror so contributors get a green check on their pull request without
+# needing a Unity licence. The stub harness in ci~/ compiles all four SDK assemblies and runs
+# the unit suite against a small UnityEngine/UnityEditor shim.
+#
+# What this does NOT cover: UnityWebRequest transport, coroutine scheduling, and anything that
+# needs a real gateway. Those live in Tests/Integration~ and are run against a real workspace
+# before a release.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore "ci~/Praxsuite.CI.csproj"
+
+      - name: Build
+        run: dotnet build "ci~/Praxsuite.CI.csproj" -c Release --no-restore
+
+      - name: Test
+        run: dotnet test "ci~/Praxsuite.CI.csproj" -c Release --no-build --logger "trx;LogFileName=results.trx"
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/results.trx'
+          if-no-files-found: ignore
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The SDK's own build guard fails any Unity build containing a secret key. This repo is
+      # public, so the same rule applies to it - and a key here would reach every consumer.
+      - name: Scan for Praxsuite secret keys
+        run: |
+          if grep -rEn 'sk_live_[A-Za-z0-9]{16,}' \
+               --include='*.cs' --include='*.json' --include='*.md' \
+               --include='*.txt' --include='*.yml' --include='*.yaml' --include='*.asset' \
+               --exclude-dir=.git . ; then
+            echo "::error::A Praxsuite secret key is present in this public repository. Revoke it now - it is in git history."
+            exit 1
+          fi
+          echo "No secret keys found."
+
+      # A workspace GUID is enough to fetch that workspace's publishable key, because
+      # /auth/config is unauthenticated by design. Test config belongs in environment
+      # variables, never in a committed file.
+      - name: Check for hardcoded test credentials
+        run: |
+          if grep -rEn 'private const string (Workspace|Password|Email) *= *"[^"]+"' \
+               --include='*.cs' --exclude-dir=.git . ; then
+            echo "::error::Hardcoded test credentials found. Use the PRAX_TEST_* environment variables instead."
+            exit 1
+          fi
+          echo "No hardcoded test credentials."

@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Compiles and tests the SDK without Unity.
+
+    Unity's own test runner needs a licensed editor, which makes it awkward in CI and slow
+    locally. But almost nothing in this SDK is Unity-specific: the JSON codec, the query
+    builder, the wire-shape parsers, the credential guard and the log scrubber are plain C#.
+    Those are also the parts where a silent mistake produces wrong data rather than a compile
+    error, so they are the parts most worth testing on every commit.
+
+    So this project compiles all four SDK assemblies against the small UnityEngine and
+    UnityEditor stubs in ci/stubs, and runs the NUnit suite against them. It proves the SDK
+    compiles and behaves; it does not prove Unity-runtime behaviour such as UnityWebRequest
+    transport or coroutine scheduling. Those still need a run in a real project.
+
+    Local use:
+        dotnet test ci/Praxsuite.CI.csproj
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>9</LangVersion>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>Praxsuite.CI</AssemblyName>
+    <RootNamespace>Praxsuite</RootNamespace>
+
+    <!-- Sources are listed explicitly so a stray file cannot be pulled in silently. -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+
+    <!-- Serialized fields the stubs never assign; Unity assigns them at runtime. -->
+    <NoWarn>CS0169;CS0649;CS0414</NoWarn>
+
+    <!--
+      Matches how Unity compiles the package: a modern editor, and PRAXSUITE_SERVER on so the
+      server assembly is checked too. Note that this is exactly the define combination the
+      build guard refuses for a player build - here it is deliberate, because the point is to
+      compile the server code, not to ship it.
+    -->
+    <DefineConstants>UNITY_2021_2_OR_NEWER;UNITY_2020_2_OR_NEWER;PRAXSUITE_SERVER</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="stubs/**/*.cs" />
+    <Compile Include="../Runtime/**/*.cs" />
+    <Compile Include="../Server/**/*.cs" />
+    <Compile Include="../Editor/**/*.cs" />
+    <!--
+      Tests/Integration~ is excluded on purpose. Unity ignores a ~-suffixed folder, but MSBuild
+      does not, so the glob would otherwise pull in the live integration suite - which depends on
+      UnityEngine.TestTools (UnityTest, IEnumerator-returning tests) that the stubs deliberately
+      do not fake, and which hits a real gateway over the network. Neither belongs in an offline
+      build check.
+    -->
+    <Compile Include="../Tests/**/*.cs" Exclude="../Tests/Integration~/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NUnit" Version="3.14.0" />
+    <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+  </ItemGroup>
+
+</Project>

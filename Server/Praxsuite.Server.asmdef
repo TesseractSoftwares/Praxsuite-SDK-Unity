@@ -1,0 +1,24 @@
+{
+  "name": "Praxsuite.Server",
+  "rootNamespace": "Praxsuite.Server",
+  "references": [
+    "Praxsuite.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor",
+    "LinuxStandalone64",
+    "macOSStandalone",
+    "WindowsStandalone32",
+    "WindowsStandalone64"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "PRAXSUITE_SERVER"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

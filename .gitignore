@@ -1,0 +1,28 @@
+# Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+# Unity regenerates these from the .asmdef files, so they are never committed - except the
+# CI harness project, which is hand-written and is what the pipeline builds.
+*.csproj
+!ci~/Praxsuite.CI.csproj
+*.sln
+*.user
+*.pidb
+*.booproj
+*.svd
+*.userprefs
+
+# Never commit a secret key, whatever it is called
+*sk_live_*
+*.secret
+.env
+.env.*
+
+# CI harness build output
+ci~/bin/
+ci~/obj/

@@ -1,0 +1,46 @@
+{
+  "name": "com.tesseractsoftwares.praxsuite",
+  "displayName": "Praxsuite SDK",
+  "version": "1.0.0",
+  "unity": "2021.3",
+  "description": "Backend-as-a-service for Unity games, powered by Praxsuite. Player accounts, saves, leaderboards, inventories, files and server-authoritative logic - with no server code to write.\n\nZero dependencies. Install, paste your Workspace ID, ship.",
+  "keywords": [
+    "praxsuite",
+    "backend",
+    "baas",
+    "multiplayer",
+    "leaderboard",
+    "authentication",
+    "database"
+  ],
+  "author": {
+    "name": "Tesseract Softwares",
+    "url": "https://praxsuite.com"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "hideInEditor": false,
+  "samples": [
+    {
+      "displayName": "Quick Start",
+      "description": "Sign a player in and read/write their own save row.",
+      "path": "Samples~/QuickStart"
+    },
+    {
+      "displayName": "Leaderboard",
+      "description": "A public top-N leaderboard with a server-authoritative score submit.",
+      "path": "Samples~/Leaderboard"
+    },
+    {
+      "displayName": "Server-Authoritative Purchase",
+      "description": "Spend currency through a gateway endpoint so the client cannot cheat.",
+      "path": "Samples~/ServerAuthoritative"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TesseractSoftwares/Praxsuite-SDK-Unity.git"
+  },
+  "documentationUrl": "https://github.com/TesseractSoftwares/Praxsuite-SDK-Unity",
+  "changelogUrl": "https://github.com/TesseractSoftwares/Praxsuite-SDK-Unity/blob/master/CHANGELOG.md",
+  "licensesUrl": "https://github.com/TesseractSoftwares/Praxsuite-SDK-Unity/blob/master/LICENSE"
+}
