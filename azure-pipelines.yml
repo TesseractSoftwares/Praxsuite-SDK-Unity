@@ -121,6 +121,21 @@ stages:
             ls -la "$(Build.ArtifactStagingDirectory)/package/"
           displayName: 'Pack tarball'
 
+        # An artifact that exists is not an artifact that works. The TypeScript SDK published a
+        # 7 KB tarball containing no code, and every gate in that pipeline passed because each one
+        # checked for the artifact's presence and its "uploaded" state - never its contents.
+        - script: |
+            set -e
+            TGZ=$(ls "$(Build.ArtifactStagingDirectory)/package/"*.tgz | head -1)
+            CS=$(tar -tzf "$TGZ" | grep -c '\.cs$' || true)
+            echo "Tarball carries $CS C# files."
+            if [ "$CS" -lt 20 ]; then
+              echo "##vso[task.logissue type=error]The package does not contain the SDK sources. Contents:"
+              tar -tzf "$TGZ"
+              exit 1
+            fi
+          displayName: 'Verify the package carries the SDK'
+
         - task: PublishBuildArtifacts@1
           displayName: 'Publish tarball artifact'
           inputs:
