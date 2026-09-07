@@ -83,7 +83,104 @@ Prefer coroutines? `yield return task.AsCoroutine();`
 | `Prax.Files` | Upload and download, including textures; short-lived signed URLs |
 | `Prax.Players` | Platform identity links for analytics and account linking |
 | `Prax.Schema` | Address tables by name instead of GUID |
+| `Prax.Bus` | The Event Bus - ephemeral realtime between connected players (not on WebGL) |
 | `PraxServer` | Secret-key access for a dedicated server build. Excluded from client builds by construction. |
+
+---
+
+## The Event Bus
+
+Ephemeral realtime between connected players: avatars, cursors, "is typing", a lobby. State
+that is *changing*, where losing a message is fine because a newer one is 100ms behind it.
+
+```csharp
+await Prax.Auth.LoginAsync(email, password);   // the bus needs a signed-in player, not the key
+
+var room = Prax.Bus.Topic("office").Channel("hq");   // the bus "office:hq"
+
+room.On("move", e => MoveAvatar(e.FromUserId, e.Payload));
+room.OnPeerLeft(RemoveAvatar);
+
+// JoinAsync returns everyone already in the room, so a player who arrives late sees the
+// world rather than an empty one until somebody happens to move.
+foreach (var peer in await room.JoinAsync())
+    MoveAvatar(peer.UserId, peer.Payload);
+
+await room.PublishAsync("move", new { x, y });
+```
+
+**Handlers run on Unity's main thread**, so they may touch Transforms, instantiate prefabs and
+read scene state directly - the receive loop is a worker thread and the SDK marshals for you.
+
+**A topic must exist before anyone can join it.** Declare it once in the portal under
+API Gateway / Event Bus and pick its access rule: open to any signed-in player, gated on a role
+from their token, or gated on a grant on that one bus instance. An undeclared topic is refused -
+which is what stops another game's client squatting in your namespace.
+
+`Prax.Bus.Self` is the player's own bus, `user:self`. The server resolves it to their id, so it
+can never address anybody else - useful for pushing to one player across their devices.
+
+Publish **decisions, not frames**. One message per movement decision (`from`, `to`) rather than
+one per rendered frame: a two-second walk becomes one message instead of a hundred, and the
+receiving client interpolates. The rate limit is priced by RECIPIENTS, so a busy room exhausts
+it far faster than an empty one.
+
+Three things about it are not obvious and will bite:
+
+- **Nothing is persisted.** No history, no retry, no delivery to a player who was not connected.
+  The test is one question: *if this is lost, does it matter?* Yes - a purchase, a score, an
+  inventory grant - means a table or an automation, and a server-authoritative one at that. No,
+  because a newer one is coming, means the bus.
+- **Payloads are hostile.** The bus relays opaque JSON between *players* and parses none of it,
+  so every server-side check is bypassed. A position is a hint, never an authority.
+- **You never receive your own event.** Apply your own change locally.
+
+`PublishAsync` does not throw when the bus refuses a frame - a game loop that throws on a rate
+limit is worse than one that skips a frame. Read the result when you care:
+
+```csharp
+var r = await room.PublishAsync("move", new { x, y });
+if (!r.Ok) Debug.Log(r.Error);        // e.g. "rate_limited"
+if (r.Recipients == 0) { }            // it went out, and nobody was joined
+```
+
+`JoinAsync` is the opposite and throws: a publish that does not land is one lost frame, a join
+that does not land leaves this player silently absent for the whole session.
+
+**Not on WebGL.** The bus runs on `ClientWebSocket`, which Unity supports on standalone, iOS,
+Android and the editor but not in a WebGL build - that target has no socket API and every
+connection attempt fails at runtime. Everything else in this SDK works on WebGL; only the bus
+does not.
+
+---
+
+## Signing in with an external provider
+
+```csharp
+var config = await Prax.Auth.GetWorkspaceConfigAsync();
+foreach (var provider in config.Providers)
+    AddSignInButton(provider.Slug, provider.DisplayName);
+
+var start = await Prax.Auth.StartOidcLoginAsync("tesseract");
+Application.OpenURL(start.AuthorizationUrl);
+
+// ...once the provider redirects back (deep link, or a loopback listener) with code and state:
+await Prax.Auth.CompleteOidcLoginAsync(
+    "tesseract", code, state,
+    "https://app.example/callback");   // byte-identical to the configured redirect URI
+```
+
+All four arguments are required, and three of them are why an external sign-in fails when it
+fails: the gateway scopes its one-time `state` per provider, consumes it once, and compares the
+redirect URI against the value configured for that provider. Pass the URI you were actually
+redirected to rather than rebuilding it.
+
+The session lands in the same store as a password login, so refresh, sign-out and every
+authenticated call behave identically afterwards.
+
+Only the authorization-code flow exists - there is no route that accepts a provider's own
+id_token - so even a native Google or Apple button has to make this browser hop, which makes it
+a fit for desktop and mobile rather than for a console.
 
 ---
 

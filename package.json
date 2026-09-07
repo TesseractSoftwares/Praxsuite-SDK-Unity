@@ -1,7 +1,7 @@
 {
   "name": "com.tesseractsoftwares.praxsuite",
   "displayName": "Praxsuite SDK",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "unity": "2021.3",
   "description": "Backend-as-a-service for Unity games, powered by Praxsuite. Player accounts, saves, leaderboards, inventories, files and server-authoritative logic - with no server code to write.\n\nZero dependencies. Install, paste your Workspace ID, ship.",
   "keywords": [
