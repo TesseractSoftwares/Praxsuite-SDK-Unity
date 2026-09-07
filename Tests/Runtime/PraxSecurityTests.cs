@@ -71,7 +71,7 @@ namespace Praxsuite.Tests
         public void Settings_reject_a_secret_key_in_the_publishable_field()
         {
             var settings = UnityEngine.ScriptableObject.CreateInstance<PraxsuiteSettings>();
-            settings.workspaceId = "1eb92f32-d628-4656-8c64-cd0d43c9869d";
+            settings.workspaceId = "00000000-0000-4000-8000-0000000000ff";
             settings.publishableKey = FakeSecret;
 
             var problem = settings.Validate();
