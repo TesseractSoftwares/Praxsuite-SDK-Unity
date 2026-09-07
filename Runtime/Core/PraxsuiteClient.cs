@@ -106,6 +106,12 @@ namespace Praxsuite
         internal readonly PraxFiles FilesModule;
         internal readonly PraxPlayers PlayersModule;
 
+        /// <summary>
+        /// The Event Bus: ephemeral realtime between connected clients. Needs a signed-in end
+        /// user, not the workspace key. Not available on WebGL - see PraxBus.
+        /// </summary>
+        internal readonly PraxBus BusModule;
+
         /// <summary>Raised after a successful sign-in or a session restored from disk.</summary>
         public event Action<PraxSession> SignedIn;
 
@@ -152,6 +158,7 @@ namespace Praxsuite
             EndpointsModule = new PraxEndpoints(this);
             FilesModule = new PraxFiles(this);
             PlayersModule = new PraxPlayers(this);
+            BusModule = new PraxBus(this);
 
             if (PraxRoutes.IsInsecureRemote(BaseUrl))
             {

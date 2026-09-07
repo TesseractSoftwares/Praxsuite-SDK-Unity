@@ -47,6 +47,13 @@ namespace Praxsuite
         /// <summary>Platform identity links, for analytics and account linking.</summary>
         public static PraxPlayers Players => PraxsuiteClient.Instance.PlayersModule;
 
+        /// <summary>
+        /// The Event Bus: ephemeral realtime between connected clients - cursors, avatars,
+        /// typing indicators, multiplayer state. Nothing is persisted, and it needs a
+        /// signed-in end user. Not available on WebGL.
+        /// </summary>
+        public static PraxBus Bus => PraxsuiteClient.Instance.BusModule;
+
         /// <summary>Table name to id mapping.</summary>
         public static PraxSchema Schema => PraxsuiteClient.Instance.Schema;
 
