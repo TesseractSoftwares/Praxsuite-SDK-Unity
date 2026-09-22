@@ -13,6 +13,11 @@ rather than shipping.
 
 ---
 
+## Guides
+
+- [Use Case](https://learn.praxsuite.com/examples/unity/unity-sdk-use-case/)
+- [Implementation](https://learn.praxsuite.com/examples/unity/unity-sdk-implementation/)
+
 ## Install
 
 Unity → **Window → Package Manager → + → Add package from git URL**:
