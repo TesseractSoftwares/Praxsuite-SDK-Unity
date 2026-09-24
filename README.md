@@ -157,6 +157,11 @@ Android and the editor but not in a WebGL build - that target has no socket API 
 connection attempt fails at runtime. Everything else in this SDK works on WebGL; only the bus
 does not.
 
+> Before 1.1.1 that last sentence was wrong. WebGL is single-threaded and has no thread pool,
+> and the SDK's HTTP layer handed its continuations to one - so a call's request completed,
+> the browser showed a 200, and the awaiting code never resumed. `LoginAsync` sat pending
+> forever with no error. If you are on 1.1.0 or earlier and targeting WebGL, upgrade.
+
 ---
 
 ## Signing in with an external provider

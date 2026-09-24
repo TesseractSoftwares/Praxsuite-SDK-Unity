@@ -74,6 +74,18 @@ namespace UnityEngine
         public static void OpenURL(string url) { }
     }
 
+    /// <summary>
+    /// Only what the retry backoff reads. unscaledDeltaTime returns 0 here, which would spin a
+    /// delay coroutine forever - harmless, because nothing in the offline suite drives a
+    /// coroutine. Unity's own player loop supplies the real value.
+    /// </summary>
+    public static class Time
+    {
+        public static float unscaledDeltaTime => 0f;
+        public static float deltaTime => 0f;
+        public static float realtimeSinceStartup => 0f;
+    }
+
     public enum RuntimePlatform { WindowsPlayer, LinuxPlayer, OSXPlayer, Android, IPhonePlayer }
 
     public static class SystemInfo

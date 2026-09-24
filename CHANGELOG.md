@@ -3,6 +3,47 @@
 All notable changes to the Praxsuite SDK for Unity.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] - 2026-09-24
+
+### Fixed
+
+- **Every SDK call hung on WebGL.** `LoginAsync` never returned; the browser's network tab
+  showed the SDK's `/auth/config` discovery call answering 200, and then nothing. Reported
+  from a real WebGL build, where the login Task was still pending after 170 seconds.
+
+  The cause was one flag. The HTTP layer created its completion sources with
+  `TaskCreationOptions.RunContinuationsAsynchronously`, which is good practice everywhere
+  else - it stops a caller's continuation running inside the code that completed the task.
+  It means "do not run the continuation here, schedule it", and combined with the SDK's
+  internal `ConfigureAwait(false)` that scheduled it onto the thread pool.
+
+  Unity's WebGL player has no thread pool. `Thread` does not start and queued work is never
+  picked up, because there are no worker threads to pick it up. So the continuation was
+  queued and simply never ran: no exception, no timeout, no log line, just a Task that stayed
+  pending. Every awaited call in the SDK was affected, not only login - login is where it was
+  noticed because it is usually the first call a game makes.
+
+  Completions now resume inline, on the thread that completes them, which is always Unity's
+  main thread. Four tests pin the property down, including the nested-await chain the real
+  failure ran through.
+
+- **Retries would have hung on WebGL too**, after any transient failure. The backoff used
+  `Task.Delay`, whose timer callback is dispatched by that same absent thread pool, so the
+  delay never elapsed and the retry never fired. It now waits on a coroutine, driven by
+  Unity's player loop. Harder to notice than the login bug and exactly the same stall.
+
+- **A failed continuation could leak a `UnityWebRequest`.** The awaiting caller's code now
+  resumes on the coroutine's stack, so the request is disposed *before* the continuation
+  runs rather than after. Previously an exception thrown by caller code after an `await`
+  escaped the coroutine and skipped the `using`.
+
+### Known gaps
+
+- None of this was verified in a real WebGL build, because that needs a Unity install this
+  was not written on. The offline suite proves the property the fix depends on - that a
+  continuation resumes on the completing thread with no scheduler involved - which is what
+  WebGL needs. A build is still the acceptance test.
+
 ## [1.1.0] - 2026-09-07
 
 ### Added
