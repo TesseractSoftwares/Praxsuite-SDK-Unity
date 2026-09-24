@@ -239,7 +239,7 @@ namespace Praxsuite
         private static Task<Response> RunOnMainThreadAsync(Func<UnityWebRequest> factory,
             CancellationToken ct, Action<UnityWebRequest> reader = null)
         {
-            var tcs = new TaskCompletionSource<Response>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var tcs = PraxCompletion.Create<Response>();
 
             PraxDispatcher.Run(() =>
             {
@@ -259,9 +259,25 @@ namespace Praxsuite
             return tcs.Task;
         }
 
+        /// <summary>
+        /// Drives one request to completion, then hands the outcome to the awaiting caller.
+        ///
+        /// The completion happens AFTER the using block, which matters more than it looks.
+        /// These tasks resume their awaiter inline (see <see cref="PraxCompletion"/>, and WebGL's
+        /// missing thread pool for why), so the caller's code - and everything it awaits -
+        /// runs on this stack. Completing inside the using would mean all of that ran while
+        /// the UnityWebRequest was still alive, holding its download buffer; and if any of it
+        /// threw, the exception would escape this coroutine and the request would never be
+        /// disposed at all. Disposing first makes the caller's continuation somebody else's
+        /// problem, which is the correct arrangement.
+        /// </summary>
         private static IEnumerator Drive(UnityWebRequest request, TaskCompletionSource<Response> tcs,
             CancellationToken ct, Action<UnityWebRequest> reader)
         {
+            Response result = null;
+            Exception failure = null;
+            var cancelled = false;
+
             using (request)
             {
                 var operation = request.SendWebRequest();
@@ -271,51 +287,59 @@ namespace Praxsuite
                     if (ct.IsCancellationRequested)
                     {
                         request.Abort();
-                        tcs.TrySetCanceled(ct);
-                        yield break;
+                        cancelled = true;
+                        break;
                     }
                     yield return null;
                 }
 
-                // A protocol error still carries a status and body worth reading, so only
-                // connection and data-processing errors become transport failures here.
-                var isTransport =
+                if (!cancelled)
+                {
+                    // A protocol error still carries a status and body worth reading, so only
+                    // connection and data-processing errors become transport failures here.
+                    var isTransport =
 #if UNITY_2020_2_OR_NEWER
-                    request.result == UnityWebRequest.Result.ConnectionError ||
-                    request.result == UnityWebRequest.Result.DataProcessingError;
+                        request.result == UnityWebRequest.Result.ConnectionError ||
+                        request.result == UnityWebRequest.Result.DataProcessingError;
 #else
-                    request.isNetworkError;
+                        request.isNetworkError;
 #endif
 
-                if (isTransport)
-                {
-                    var timedOut = !string.IsNullOrEmpty(request.error) &&
-                                   request.error.IndexOf("timeout", StringComparison.OrdinalIgnoreCase) >= 0;
-                    tcs.TrySetException(new PraxException(
-                        timedOut ? "TIMEOUT" : "NETWORK_ERROR",
-                        "Could not reach the Praxsuite gateway: " + request.error +
-                        "\nURL: " + request.url,
-                        0));
-                    yield break;
+                    if (isTransport)
+                    {
+                        var timedOut = !string.IsNullOrEmpty(request.error) &&
+                                       request.error.IndexOf("timeout", StringComparison.OrdinalIgnoreCase) >= 0;
+                        failure = new PraxException(
+                            timedOut ? "TIMEOUT" : "NETWORK_ERROR",
+                            "Could not reach the Praxsuite gateway: " + request.error +
+                            "\nURL: " + request.url,
+                            0);
+                    }
+                    else
+                    {
+                        // The reader and the body must both be read before the using disposes
+                        // the request - downloadHandler.text is gone afterwards.
+                        try
+                        {
+                            reader?.Invoke(request);
+                            result = new Response
+                            {
+                                Status = request.responseCode,
+                                Body = request.downloadHandler != null ? request.downloadHandler.text : null,
+                                Headers = request.GetResponseHeaders()
+                            };
+                        }
+                        catch (Exception ex)
+                        {
+                            failure = ex;
+                        }
+                    }
                 }
-
-                try
-                {
-                    reader?.Invoke(request);
-                }
-                catch (Exception ex)
-                {
-                    tcs.TrySetException(ex);
-                    yield break;
-                }
-
-                tcs.TrySetResult(new Response
-                {
-                    Status = request.responseCode,
-                    Body = request.downloadHandler != null ? request.downloadHandler.text : null,
-                    Headers = request.GetResponseHeaders()
-                });
             }
+
+            if (cancelled) tcs.TrySetCanceled(ct);
+            else if (failure != null) tcs.TrySetException(failure);
+            else tcs.TrySetResult(result);
         }
 
         // ------------------------------------------------------------------ errors
@@ -415,9 +439,42 @@ namespace Praxsuite
             return Math.Min(Math.Max(backoff + jitter, 0.1), MaxBackoffSeconds);
         }
 
+        /// <summary>
+        /// Waits between retries, on a coroutine rather than <c>Task.Delay</c>.
+        ///
+        /// Task.Delay is the obvious choice and it is wrong here for the same reason the
+        /// completion sources are: it arms a timer whose callback is dispatched by the thread
+        /// pool, and WebGL has no thread pool. The delay simply never elapses, so the retry
+        /// never fires and the call hangs - the same silent stall as the login bug, but only
+        /// reachable after a transient failure, which makes it far harder to catch.
+        ///
+        /// A coroutine is driven by Unity's own player loop, which exists on every target.
+        /// </summary>
         private static Task DelayAsync(double seconds, CancellationToken ct)
         {
-            return Task.Delay(TimeSpan.FromSeconds(seconds), ct);
+            var tcs = PraxCompletion.Create<bool>();
+            PraxDispatcher.Run(() => PraxDispatcher.StartRoutine(DelayRoutine(seconds, tcs, ct)));
+            return tcs.Task;
+        }
+
+        private static IEnumerator DelayRoutine(double seconds, TaskCompletionSource<bool> tcs,
+            CancellationToken ct)
+        {
+            // Unscaled time on purpose: a game that pauses by setting Time.timeScale to zero
+            // would otherwise never retry, and "the network stopped working while paused" is a
+            // confusing bug to be handed.
+            var remaining = (float)seconds;
+            while (remaining > 0f)
+            {
+                if (ct.IsCancellationRequested)
+                {
+                    tcs.TrySetCanceled(ct);
+                    yield break;
+                }
+                yield return null;
+                remaining -= Time.unscaledDeltaTime;
+            }
+            tcs.TrySetResult(true);
         }
 
         // ------------------------------------------------------------------ helpers

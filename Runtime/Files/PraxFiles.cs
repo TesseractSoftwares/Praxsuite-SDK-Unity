@@ -105,7 +105,7 @@ namespace Praxsuite
             var bytes = await DownloadAsync(fileId, ct).ConfigureAwait(false);
 
             // LoadImage must run on the main thread, and the await above may have moved us off it.
-            var tcs = new TaskCompletionSource<Texture2D>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var tcs = PraxCompletion.Create<Texture2D>();
             PraxDispatcher.Run(() =>
             {
                 try
