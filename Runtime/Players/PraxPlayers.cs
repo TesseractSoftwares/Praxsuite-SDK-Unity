@@ -26,8 +26,12 @@ namespace Praxsuite
 
         /// <summary>
         /// True only when the gateway confirmed the id against the platform's own API.
-        /// Praxsuite ships a validator for Roblox; for Steam and others there is nothing to
-        /// check against yet, so this stays false and the id is an unverified label.
+        /// Praxsuite ships a validator for Roblox; for the others there is nothing to check
+        /// against yet, so this stays false and the id is an unverified label.
+        ///
+        /// Even true is weaker than it sounds: it says the id exists on that platform, not that
+        /// the caller is the person behind it. For Steam, the id proven to belong to the player
+        /// is the one <see cref="PraxAuth.SignInWithSteamAsync"/> returns.
         /// </summary>
         public bool IsValidated;
     }
@@ -47,11 +51,11 @@ namespace Praxsuite
     /// belongs to <see cref="PraxAuth"/>, where the gateway issues the token and applies the
     /// row filter, and where the client cannot choose who it is.
     ///
-    /// If you want platform login to be the only sign-in your players see, the shape that
-    /// actually holds is: client sends the platform's signed session ticket to a gateway
-    /// endpoint, an automation verifies that ticket with the platform's server API, and only
-    /// then does the automation return credentials. The verification has to happen somewhere
-    /// the player cannot edit.
+    /// If you want platform login to be the only sign-in your players see, Steam has a real one:
+    /// <see cref="PraxAuth.SignInWithSteamAsync"/>. The client sends the session ticket Steam
+    /// signed for the account actually logged in, the gateway checks it against Steam's own API
+    /// with a publisher key that never reaches the build, and only then is a session issued.
+    /// That is a verified identity and this is a label; keep using this one for analytics.
     /// </summary>
     public class PraxPlayers
     {

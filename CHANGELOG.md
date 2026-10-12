@@ -3,6 +3,37 @@
 All notable changes to the Praxsuite SDK for Unity.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Sign in with Steam.** `Prax.Auth.SignInWithSteamAsync(ticket)` opens a session from a
+  session ticket Steam signed, and `SignInWithTicketAsync(providerSlug, ticket)` does the same
+  for any provider the workspace registered with kind `Ticket`.
+
+  Until now a game on Steam had two options and neither held. `Prax.Players.IdentifyAsync`
+  records a Steam ID, but that id is a label the client sends - nothing signs it, so a modified
+  build claims any id it likes. The OIDC flow needs a browser hop and Steam is not an OIDC
+  provider anyway.
+
+  A ticket is different in the one way that matters: the player's own Steam client asks
+  Steamworks for it, Steam signs it for the account actually logged in, and the gateway asks
+  Steam who that is with a publisher key that never reaches the build. The SteamID the player is
+  signed in as is **the one Steam returns** - neither method takes a player id, because a
+  parameter for one would invite a caller to think it was being checked.
+
+  Steamworks is not a dependency of the SDK and should not become one: the ticket arrives as a
+  hex string, and getting it is the game's job.
+
+  Requires a `steam` identity provider of kind `Ticket` in the workspace, carrying the
+  Steamworks publisher key and the App ID.
+
+### Changed
+
+- `PraxPlayers` and `PraxPlayerIdentity.IsValidated` now point at `SignInWithSteamAsync` instead
+  of describing, in prose, a flow that did not exist. The warning itself is unchanged: what this
+  module records is a label, and labels do not decide what data a player reaches.
+
 ## [1.1.1] - 2026-09-24
 
 ### Fixed

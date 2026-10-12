@@ -188,9 +188,33 @@ redirected to rather than rebuilding it.
 The session lands in the same store as a password login, so refresh, sign-out and every
 authenticated call behave identically afterwards.
 
-Only the authorization-code flow exists - there is no route that accepts a provider's own
-id_token - so even a native Google or Apple button has to make this browser hop, which makes it
-a fit for desktop and mobile rather than for a console.
+Only the authorization-code flow exists for OIDC providers - there is no route that accepts a
+provider's own id_token - so even a native Google or Apple button has to make this browser hop,
+which makes it a fit for desktop and mobile rather than for a console.
+
+### Sign in with Steam
+
+Steam does not make that hop, and does not need to.
+
+```csharp
+// Your game holds the Steamworks dependency; the SDK never does.
+var ticket = await Steam.GetSessionTicketHexAsync();
+
+var result = await Prax.Auth.SignInWithSteamAsync(ticket);
+if (result.IsSignedIn) { /* same session as any other login */ }
+```
+
+The client asks Steamworks for a session ticket, which Steam signs for the account actually
+logged in. The gateway checks it against Steam's own API with a publisher key that never reaches
+the build, and the SteamID it signs the player in as is **the one Steam returns** - the method
+has no parameter for one, because a client-supplied id is a label and not a claim.
+
+That makes it the only platform sign-in here that survives a modified build: an attacker can
+send any ticket they like and still cannot get Steam to sign one for an account they are not
+logged into. Contrast `Prax.Players.IdentifyAsync`, whose Steam ID is exactly that label.
+
+The workspace needs a `steam` identity provider of kind `Ticket`, carrying the Steamworks
+publisher key and the App ID. Without it the call returns 404 naming the provider.
 
 ---
 
