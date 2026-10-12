@@ -445,6 +445,103 @@ namespace Praxsuite
             return PraxAuthMapper.ToAuthResult(body, session);
         }
 
+        // ---------------------------------------------------------- platform tickets
+
+        /// <summary>
+        /// Signs a player in with a session ticket Steam signed for them.
+        ///
+        /// This is the sign-in to use for a game shipped on Steam, and the reason is worth
+        /// stating because the two obvious alternatives both fail:
+        ///
+        ///   <see cref="PraxPlayers.IdentifyAsync"/> records a Steam ID, but that id is a label
+        ///   the client supplied. Nothing signs it, so a modified build claims any id it likes.
+        ///
+        ///   <see cref="StartOidcLoginAsync"/> needs a browser round trip, and Steam is not an
+        ///   OIDC provider anyway.
+        ///
+        /// A ticket is neither. The player's own Steam client asks Steamworks for one, Steam
+        /// signs it for the account actually logged in, and the gateway asks Steam who that is
+        /// using a publisher key that never reaches the build. A modified client can send any
+        /// ticket it likes and still cannot become somebody else, because it cannot get Steam to
+        /// sign a ticket for an account it is not logged into.
+        ///
+        /// Note what this method does NOT take: a Steam ID. The id comes back from Steam, and a
+        /// parameter for one would only invite a caller to think it was being checked.
+        ///
+        /// Getting the ticket is the game's job, not the SDK's: Steamworks.NET and
+        /// Facepunch.Steamworks are not dependencies here and should not become ones. Call
+        /// <c>SteamUser.GetAuthTicketForWebApi</c> (or the older <c>GetAuthSessionTicket</c>),
+        /// hex-encode the bytes, and pass the string.
+        ///
+        /// The workspace needs a "steam" identity provider of kind Ticket, carrying the
+        /// publisher key and the App ID. Without it this returns a 404 naming the provider.
+        /// </summary>
+        /// <param name="sessionTicket">The ticket as hex, straight from Steamworks.</param>
+        /// <param name="identity">
+        /// The identity string passed to <c>GetAuthTicketForWebApi</c>, when the game uses that
+        /// API. Steam binds the ticket to it and rejects the ticket if it does not match. Leave
+        /// null for <c>GetAuthSessionTicket</c>.
+        /// </param>
+        /// <param name="displayName">
+        /// The persona name, cached for leaderboards and admin views. Cosmetic: it comes from
+        /// the client, so the gateway stores it as a label and reads it for nothing else.
+        /// </param>
+        public Task<PraxAuthResult> SignInWithSteamAsync(
+            string sessionTicket,
+            string identity = null,
+            string displayName = null,
+            CancellationToken ct = default)
+        {
+            return SignInWithTicketAsync("steam", sessionTicket, identity, displayName, ct: ct);
+        }
+
+        /// <summary>
+        /// The same flow as <see cref="SignInWithSteamAsync"/> for any provider the workspace
+        /// registered with kind Ticket. Steam is the one that exists today; the console networks
+        /// use the same shape, so this is here rather than a second near-identical method later.
+        ///
+        /// The session is stored exactly as a password login stores it, so refresh, sign-out and
+        /// every authenticated call behave identically afterwards.
+        /// </summary>
+        /// <param name="providerSlug">The provider's slug in the workspace, e.g. "steam".</param>
+        public async Task<PraxAuthResult> SignInWithTicketAsync(
+            string providerSlug,
+            string sessionTicket,
+            string identity = null,
+            string displayName = null,
+            IDictionary<string, object> metadata = null,
+            CancellationToken ct = default)
+        {
+            Require(providerSlug, nameof(providerSlug));
+            Require(sessionTicket, nameof(sessionTicket));
+
+            var payload = new Dictionary<string, object>
+            {
+                { "ticket", sessionTicket.Trim() }
+            };
+            if (!string.IsNullOrWhiteSpace(identity)) payload["identity"] = identity.Trim();
+            if (!string.IsNullOrWhiteSpace(displayName)) payload["displayName"] = displayName.Trim();
+
+            if (metadata != null && metadata.Count > 0)
+            {
+                var map = new Dictionary<string, object>(metadata.Count);
+                foreach (var pair in metadata) map[pair.Key] = pair.Value;
+                payload["metadata"] = map;
+            }
+
+            // The publishable key is the right credential here, unlike the game-server routes:
+            // what the gateway believes is the ticket, not the key.
+            var body = await PraxHttp.SendJsonAsync("POST",
+                PraxRoutes.Auth(_client.BaseUrl, _client.WorkspaceId,
+                    Uri.EscapeDataString(providerSlug.Trim().ToLowerInvariant()) + "/ticket"),
+                payload, PraxHttp.AuthMode.ApiKey, ct).ConfigureAwait(false);
+
+            var session = PraxAuthMapper.ToSession(body);
+            if (session != null) _client.SetSession(session);
+
+            return PraxAuthMapper.ToAuthResult(body, session);
+        }
+
         // ---------------------------------------------------------------- helpers
 
         private static void Require(string value, string name)
